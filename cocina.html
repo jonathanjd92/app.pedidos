@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pantalla de Cocina - Panadería</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1a1a1a; color: white; padding: 20px; }
+        .grid { display: flex; flex-wrap: wrap; gap: 20px; }
+        .card { background: #2d2d2d; border-top: 5px solid #ff9800; border-radius: 8px; padding: 15px; width: 260px; position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+        .header-pedido { display: flex; justify-content: space-between; align-items: baseline; }
+        .mesa { font-size: 1.4em; color: #ff9800; margin-bottom: 5px; font-weight: bold; }
+        .tiempo { font-size: 0.85em; color: #4caf50; font-weight: bold; background: #111; padding: 2px 6px; border-radius: 4px; }
+        .pedido-id { color: #888; font-size: 0.9em; }
+        .hora-creacion { color: #aaa; font-size: 0.8em; margin-bottom: 10px; }
+        ul { padding-left: 20px; flex-grow: 1; }
+        li { font-size: 1.1em; margin: 5px 0; }
+        .nota { color: #ffeb3b; font-size: 0.85em; font-style: italic; }
+        .btn-completar { background-color: #28a745; color: white; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%; font-size: 1em; }
+        .btn-completar:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+    <h1>👨‍🍳 Pantalla de Cocina (Tiempo Real)</h1>
+    <p id="estado">Conectando a FastAPI...</p>
+    <div id="pedidos" class="grid"></div>
+
+    <script>
+        const contenedor = document.getElementById("pedidos");
+        let socket = null;
+
+        // Formatear minutos transcurridos
+        function obtenerTiempoTranscurrido(fechaIso) {
+            if (!fechaIso) return "0 min";
+            const inicio = new Date(fechaIso);
+            const ahora = new Date();
+            const diferenciaMin = Math.floor((ahora - inicio) / 60000);
+            return `${diferenciaMin} min`;
+        }
+
+        // Renderizar un pedido en la pantalla
+        function renderizarPedido(data) {
+            // Evitar duplicados si la tarjeta ya existe en pantalla
+            if (document.getElementById(`pedido-${data.pedido_id}`)) return;
+
+            const fechaObj = data.fecha_creacion ? new Date(data.fecha_creacion) : new Date();
+            const horaFormateada = fechaObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let itemsList = data.detalles.map(i => 
+                `<li><strong>${i.cantidad}x</strong> ${i.producto} ${i.notas ? `<br><span class="nota">Nota: ${i.notas}</span>` : ''}</li>`
+            ).join('');
+
+            const tarjeta = document.createElement("div");
+            tarjeta.className = "card";
+            tarjeta.id = `pedido-${data.pedido_id}`;
+            tarjeta.setAttribute("data-fecha", data.fecha_creacion || new Date().toISOString());
+
+            tarjeta.innerHTML = `
+                <div>
+                    <div class="header-pedido">
+                        <div class="mesa">Mesa #${data.mesa_id}</div>
+                        <div class="tiempo" id="tiempo-${data.pedido_id}">${obtenerTiempoTranscurrido(data.fecha_creacion)}</div>
+                    </div>
+                    <div class="pedido-id">Pedido #${data.pedido_id}</div>
+                    <div class="hora-creacion">⏰ Hora: ${horaFormateada}</div>
+                    <hr style="border-color: #444;">
+                    <ul>${itemsList}</ul>
+                </div>
+                <button class="btn-completar" onclick="completarPedido(${data.pedido_id})">✔ Marcar como Listo</button>
+            `;
+
+            contenedor.appendChild(tarjeta);
+        }
+
+        // Cargar pedidos pendientes directamente desde la base de datos
+        async function cargarPedidosPendientes() {
+            try {
+                const res = await fetch("http://127.0.0.1:8000/cocina/pedidos-pendientes");
+                if (res.ok) {
+                    const pedidos = await res.json();
+                    contenedor.innerHTML = ""; // Limpia pantalla antes de reconstruir
+                    pedidos.forEach(p => renderizarPedido(p));
+                }
+            } catch (err) {
+                console.error("Error al cargar pedidos pendientes:", err);
+            }
+        }
+
+        // Despachar / Completar Pedido (Desaparece de pantalla)
+        async function completarPedido(pedidoId) {
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/pedidos/${pedidoId}/estado?nuevo_estado=ENTREGADO`, {
+                    method: "PATCH"
+                });
+                if (res.ok) {
+                    const tarjeta = document.getElementById(`pedido-${pedidoId}`);
+                    if (tarjeta) tarjeta.remove(); // Solo desaparece cuando la cocina hace clic
+                }
+            } catch (err) {
+                alert("Error al actualizar el pedido.");
+            }
+        }
+
+        // Conexión con reconexión automática si el servidor se cae
+        function conectarWebSocket() {
+            socket = new WebSocket("ws://127.0.0.1:8000/ws/cocina");
+
+            socket.onopen = () => {
+                document.getElementById("estado").innerText = "🟢 Conectado a la cocina";
+                document.getElementById("estado").style.color = "#4caf50";
+                // Cada vez que reconecte con éxito, recarga el estado fresco de la BD
+                cargarPedidosPendientes();
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.evento === "NUEVO_PEDIDO") {
+                    const audio = new Audio('https://actions.google.com/sounds/v1/cartoon/clack.ogg');
+                    audio.play().catch(() => {});
+                    renderizarPedido(data);
+                }
+            };
+
+            socket.onclose = () => {
+                document.getElementById("estado").innerText = "🔴 Conexión perdida. Intentando reconectar...";
+                document.getElementById("estado").style.color = "#f44336";
+                // Intenta reconectar automáticamente cada 3 segundos
+                setTimeout(conectarWebSocket, 3000);
+            };
+
+            socket.onerror = (err) => {
+                socket.close();
+            };
+        }
+
+        // Iniciar conexión y timers
+        conectarWebSocket();
+
+        // Actualizar el cronómetro de los pedidos cada 30 segundos
+        setInterval(() => {
+            document.querySelectorAll(".card").forEach(tarjeta => {
+                const pedidoId = tarjeta.id.replace("pedido-", "");
+                const fechaIso = tarjeta.getAttribute("data-fecha");
+                const elementoTiempo = document.getElementById(`tiempo-${pedidoId}`);
+                if (elementoTiempo) {
+                    elementoTiempo.innerText = obtenerTiempoTranscurrido(fechaIso);
+                }
+            });
+        }, 30000);
+    </script>
+</body>
+</html>

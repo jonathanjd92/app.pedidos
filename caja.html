@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Módulo de Caja - POS Panadería</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f1f5f9; color: #1e293b; display: flex; height: 100vh; overflow: hidden; }
+
+        .left-panel { flex: 1; padding: 20px; overflow-y: auto; }
+        .header-pos { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        
+        .mesas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; }
+        .card-mesa { background: white; border-radius: 12px; padding: 20px 15px; text-align: center; border: 2px solid #e2e8f0; cursor: pointer; transition: all 0.2s; }
+        .card-mesa.ocupada { border-color: #ef4444; background: #fef2f2; }
+        .card-mesa.disponible { border-color: #22c55e; background: #f0fdf4; }
+        .card-mesa.seleccionada { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3); }
+
+        .mesa-num { font-size: 1.4em; font-weight: bold; margin-bottom: 5px; }
+        .mesa-estado { font-size: 0.85em; font-weight: bold; text-transform: uppercase; }
+        .text-ocupada { color: #dc2626; }
+        .text-disponible { color: #16a34a; }
+
+        /* Panel Derecho */
+        .right-panel { width: 420px; background: white; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: space-between; padding: 25px; box-shadow: -2px 0 10px rgba(0,0,0,0.03); }
+        .ticket-header { border-bottom: 2px dashed #cbd5e1; padding-bottom: 15px; margin-bottom: 20px; }
+
+        .btn-ver-detalle { width: 100%; padding: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: bold; color: #334155; cursor: pointer; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
+        .btn-ver-detalle:hover { background: #e2e8f0; }
+
+        .totales-row { display: flex; justify-content: space-between; font-size: 1.8em; font-weight: bold; color: #0f172a; margin-bottom: 20px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 0.9em; font-weight: bold; color: #475569; margin-bottom: 6px; }
+        .form-control { width: 100%; padding: 12px; font-size: 1em; border: 1px solid #cbd5e1; border-radius: 8px; }
+
+        .btn-cobrar { width: 100%; background: #2563eb; color: white; border: none; padding: 16px; font-size: 1.1em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+        .btn-cobrar:hover { background: #1d4ed8; }
+        .btn-cobrar:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        /* Ventana Modal para Ver Detalle de Productos */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-body { overflow-y: auto; flex: 1; }
+        .tabla-modal { width: 100%; border-collapse: collapse; }
+        .tabla-modal th { text-align: left; padding: 8px; border-bottom: 2px solid #e2e8f0; color: #64748b; }
+        .tabla-modal td { padding: 10px 8px; border-bottom: 1px solid #f1f5f9; }
+        .btn-cerrar { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- Panel Izquierdo: Mesas -->
+    <div class="left-panel">
+        <div class="header-pos">
+            <h2>💰 Módulo de Caja y Facturación</h2>
+            <button onclick="cargarMesas()" style="padding: 10px 15px; background: #e2e8f0; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Actualizar Mesas</button>
+        </div>
+
+        <h3 style="margin-bottom: 15px; color: #475569;">Selecciona una mesa para consultar la cuenta:</h3>
+        <div class="mesas-grid" id="mesasGrid">
+            <p>Cargando mesas...</p>
+        </div>
+    </div>
+
+    <!-- Panel Derecho: Cobro Directo -->
+    <div class="right-panel">
+        <div>
+            <div class="ticket-header">
+                <h2 id="ticketMesaTitulo">Mesa no seleccionada</h2>
+                <p style="font-size: 0.9em; color: #64748b;" id="ticketSubtitulo">Haz clic en una mesa ocupada</p>
+            </div>
+
+            <button class="btn-ver-detalle" id="btnVerDetalle" onclick="abrirModalDetalles()" disabled>
+                👁️ Ver Detalle de Productos Consumidos
+            </button>
+
+            <div class="totales-row">
+                <span>Total:</span>
+                <span id="totalPagar">$0</span>
+            </div>
+
+            <div class="form-group">
+                <label for="metodoPago">Método de Pago:</label>
+                <select id="metodoPago" class="form-control" onchange="calcularCambio()">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Tarjeta">Tarjeta de Débito/Crédito</option>
+                    <option value="Transferencia">Nequi / Daviplata / Transferencia</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="groupPagaCon">
+                <label for="montoRecibido">Paga con ($):</label>
+                <input type="number" id="montoRecibido" class="form-control" placeholder="Ej: 50000" oninput="calcularCambio()">
+            </div>
+
+            <div class="form-group" id="groupCambio" style="display: flex; justify-content: space-between; font-weight: bold; color: #059669; font-size: 1.2em;">
+                <span>Cambio / Devuelto:</span>
+                <span id="valCambio">$0</span>
+            </div>
+        </div>
+
+        <button class="btn-cobrar" id="btnCobrar" onclick="procesarPago()" disabled>💳 Registrar Pago y Liberar Mesa</button>
+    </div>
+
+    <!-- Modal Flotante de Productos -->
+    <div class="modal" id="modalDetalles">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📋 Desglose de Consumo</h3>
+                <button class="btn-cerrar" onclick="cerrarModalDetalles()">Cerrar</button>
+            </div>
+            <div class="modal-body" id="modalBodyItems">
+                <p style="text-align: center; color: #94a3b8;">Sin items que mostrar.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let mesaSeleccionadaId = null;
+        let totalCuentaActual = 0;
+        let pedidosMesaActual = [];
+
+        async function cargarMesas() {
+            try {
+                const res = await fetch(`${API_URL}/mesas`);
+                if (res.ok) {
+                    const mesas = await res.json();
+                    renderizarMesas(mesas);
+                }
+            } catch (err) {
+                console.error("Error al cargar mesas:", err);
+            }
+        }
+
+        function renderizarMesas(mesas) {
+            const grid = document.getElementById("mesasGrid");
+            grid.innerHTML = "";
+
+            mesas.forEach(m => {
+                const esOcupada = String(m.estado).toLowerCase() === "ocupada";
+                const esSeleccionada = m.id === mesaSeleccionadaId;
+                const numMesa = m.numero !== undefined ? m.numero : m.id;
+
+                const card = document.createElement("div");
+                card.className = `card-mesa ${esOcupada ? 'ocupada' : 'disponible'} ${esSeleccionada ? 'seleccionada' : ''}`;
+                card.onclick = () => seleccionarMesa(m.id, numMesa, esOcupada);
+
+                card.innerHTML = `
+                    <div class="mesa-num">Mesa #${numMesa}</div>
+                    <div class="mesa-estado ${esOcupada ? 'text-ocupada' : 'text-disponible'}">
+                        ${esOcupada ? '🔴 OCUPADA' : '🟢 LIBRE'}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function seleccionarMesa(id, numero, estaOcupada) {
+            mesaSeleccionadaId = id;
+            cargarMesas();
+
+            document.getElementById("ticketMesaTitulo").innerText = `Mesa #${numero}`;
+
+            if (!estaOcupada) {
+                document.getElementById("ticketSubtitulo").innerText = "Mesa libre. No hay consumos.";
+                pedidosMesaActual = [];
+                actualizarTotales(0);
+                document.getElementById("btnVerDetalle").disabled = true;
+                return;
+            }
+
+            document.getElementById("ticketSubtitulo").innerText = "Consumos activos de la mesa:";
+
+            try {
+                const res = await fetch(`${API_URL}/caja/mesa/${id}`);
+                if (res.ok) {
+                    pedidosMesaActual = await res.json();
+                    let totalAcc = 0;
+                    pedidosMesaActual.forEach(p => totalAcc += p.total);
+                    actualizarTotales(totalAcc);
+                    document.getElementById("btnVerDetalle").disabled = false;
+                }
+            } catch (err) {
+                console.error("Error al consultar cuenta:", err);
+            }
+        }
+
+        function actualizarTotales(total) {
+            totalCuentaActual = total;
+            document.getElementById("totalPagar").innerText = `$${total}`;
+            document.getElementById("btnCobrar").disabled = total <= 0;
+            calcularCambio();
+        }
+
+        function calcularCambio() {
+            const metodo = document.getElementById("metodoPago").value;
+            const groupPagaCon = document.getElementById("groupPagaCon");
+            const groupCambio = document.getElementById("groupCambio");
+
+            if (metodo !== "Efectivo") {
+                groupPagaCon.style.display = "none";
+                groupCambio.style.display = "none";
+                return;
+            }
+
+            groupPagaCon.style.display = "block";
+            groupCambio.style.display = "flex";
+
+            const montoPaga = parseFloat(document.getElementById("montoRecibido").value) || 0;
+            const cambio = montoPaga - totalCuentaActual;
+
+            const valCambioEl = document.getElementById("valCambio");
+            if (cambio >= 0) {
+                valCambioEl.innerText = `$${cambio}`;
+                valCambioEl.style.color = "#059669";
+            } else {
+                valCambioEl.innerText = "Falta dinero";
+                valCambioEl.style.color = "#dc2626";
+            }
+        }
+
+        function abrirModalDetalles() {
+            const container = document.getElementById("modalBodyItems");
+            if (pedidosMesaActual.length === 0) {
+                container.innerHTML = "<p>No hay items.</p>";
+            } else {
+                let html = `<table class="tabla-modal"><thead><tr><th>Cant</th><th>Producto</th><th style="text-align:right;">Subtotal</th></tr></thead><tbody>`;
+                pedidosMesaActual.forEach(p => {
+                    p.detalles.forEach(d => {
+                        html += `<tr><td>${d.cantidad}x</td><td>${d.producto_nombre}</td><td style="text-align:right;">$${d.subtotal}</td></tr>`;
+                    });
+                });
+                html += `</tbody></table>`;
+                container.innerHTML = html;
+            }
+            document.getElementById("modalDetalles").style.display = "flex";
+        }
+
+        function cerrarModalDetalles() {
+            document.getElementById("modalDetalles").style.display = "none";
+        }
+
+        async function procesarPago() {
+            if (!mesaSeleccionadaId) return;
+
+            const metodo = document.getElementById("metodoPago").value;
+            if (metodo === "Efectivo") {
+                const montoPaga = parseFloat(document.getElementById("montoRecibido").value) || 0;
+                if (montoPaga < totalCuentaActual) {
+                    return alert("El monto en efectivo ingresado es menor al total.");
+                }
+            }
+
+            if (!confirm(`¿Confirmar cobro de $${totalCuentaActual} y liberar Mesa #${mesaSeleccionadaId}?`)) return;
+
+            try {
+                const res = await fetch(`${API_URL}/caja/mesa/${mesaSeleccionadaId}/pagar`, {
+                    method: "POST"
+                });
+
+                if (res.ok) {
+                    alert("✅ Pago registrado con éxito. La mesa ha sido liberada.");
+                    mesaSeleccionadaId = null;
+                    document.getElementById("montoRecibido").value = "";
+                    document.getElementById("ticketMesaTitulo").innerText = "Mesa no seleccionada";
+                    document.getElementById("ticketSubtitulo").innerText = "Haz clic en una mesa ocupada";
+                    document.getElementById("btnVerDetalle").disabled = true;
+                    actualizarTotales(0);
+                    cargarMesas();
+                } else {
+                    alert("Error al procesar el pago en el servidor.");
+                }
+            } catch (err) {
+                alert("Error de conexión al procesar el pago.");
+            }
+        }
+
+        cargarMesas();
+    </script>
+</body>
+</html>

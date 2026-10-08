@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú Digital - Panadería</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f8f9fa; color: #333; display: flex; height: 100vh; overflow: hidden; }
+
+        /* Panel Izquierdo: Menú de Productos */
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .mesa-selector { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.1em; color: #d97706; }
+        .mesa-selector input { width: 70px; padding: 8px; font-size: 1em; border: 2px solid #f59e0b; border-radius: 6px; text-align: center; }
+
+        .categorias-bar { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
+        .cat-btn { background: #e5e7eb; border: none; padding: 10px 18px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; transition: 0.2s; }
+        .cat-btn.active, .cat-btn:hover { background: #d97706; color: white; }
+
+        .productos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .card-producto { background: white; border-radius: 12px; padding: 15px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.1s; }
+        .card-producto:active { transform: scale(0.98); }
+        .prod-nombre { font-size: 1.1em; font-weight: bold; color: #1f2937; margin-bottom: 5px; }
+        .prod-desc { font-size: 0.85em; color: #6b7280; margin-bottom: 12px; min-height: 32px; }
+        .prod-footer { display: flex; justify-content: space-between; align-items: center; }
+        .prod-precio { font-size: 1.1em; font-weight: bold; color: #059669; }
+        .btn-add { background: #d97706; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+        /* Panel Derecho: Carrito de Compras */
+        .sidebar-carrito { width: 380px; background: white; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-shadow: -2px 0 10px rgba(0,0,0,0.03); }
+        .carrito-header { font-size: 1.3em; font-weight: bold; border-bottom: 2px solid #f3f4f6; padding-bottom: 15px; margin-bottom: 15px; color: #1f2937; }
+        .carrito-items { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        
+        .item-carrito { background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #f3f4f6; }
+        .item-top { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; }
+        .item-controls { display: flex; align-items: center; justify-content: space-between; }
+        .qty-btn { background: #e5e7eb; border: none; width: 28px; height: 28px; border-radius: 50%; font-weight: bold; cursor: pointer; font-size: 1.1em; }
+        .item-nota { width: 100%; margin-top: 8px; padding: 6px; font-size: 0.85em; border: 1px solid #d1d5db; border-radius: 4px; }
+
+        .carrito-footer { border-top: 2px solid #f3f4f6; padding-top: 15px; margin-top: 15px; }
+        .total-row { display: flex; justify-content: space-between; font-size: 1.3em; font-weight: bold; margin-bottom: 15px; color: #111827; }
+        .btn-enviar { width: 100%; background: #059669; color: white; border: none; padding: 15px; font-size: 1.1em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+        .btn-enviar:hover { background: #047857; }
+        .btn-enviar:disabled { background: #9ca3af; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <!-- Menú Principal -->
+    <div class="main-content">
+        <div class="header">
+            <h2>🥖 Panadería - Menú Digital</h2>
+            <div class="mesa-selector">
+                <label for="numMesa">Mesa N°:</label>
+                <input type="number" id="numMesa" value="1" min="1">
+            </div>
+        </div>
+
+        <!-- Barra de Categorías -->
+        <div class="categorias-bar" id="categoriasBar">
+            <button class="cat-btn active" onclick="filtrarCategoria('todas', this)">Todas</button>
+        </div>
+
+        <!-- Grid de Productos -->
+        <div class="productos-grid" id="productosGrid">
+            <p>Cargando menú...</p>
+        </div>
+    </div>
+
+    <!-- Carrito de Compras -->
+    <div class="sidebar-carrito">
+        <div>
+            <div class="carrito-header">🛒 Su Pedido</div>
+            <div class="carrito-items" id="carritoItems">
+                <p style="color: #9ca3af; text-align: center; margin-top: 20px;">No has agregado productos.</p>
+            </div>
+        </div>
+
+        <div class="carrito-footer">
+            <div class="total-row">
+                <span>Total:</span>
+                <span id="totalAcumulado">$0</span>
+            </div>
+            <button class="btn-enviar" id="btnEnviar" onclick="enviarPedido()" disabled>Confirmar y Enviar Pedido</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let todosLosProductos = [];
+        let carrito = [];
+
+        // 1. Cargar Categorías y Productos desde FastAPI
+        async function cargarDatos() {
+            try {
+                const [resCat, resProd] = await Promise.all([
+                    fetch(`${API_URL}/categorias`),
+                    fetch(`${API_URL}/productos`)
+                ]);
+
+                if (resCat.ok && resProd.ok) {
+                    const categorias = await resCat.json();
+                    todosLosProductos = await resProd.json();
+
+                    renderizarCategorias(categorias);
+                    renderizarProductos(todosLosProductos);
+                }
+            } catch (err) {
+                console.error("Error cargando los datos:", err);
+                document.getElementById("productosGrid").innerHTML = "<p style='color:red;'>Error al conectar con el servidor.</p>";
+            }
+        }
+
+        // 2. Renderizar botones de Categorías
+        function renderizarCategorias(categorias) {
+            const bar = document.getElementById("categoriasBar");
+            categorias.forEach(cat => {
+                const btn = document.createElement("button");
+                btn.className = "cat-btn";
+                btn.innerText = cat.nombre;
+                btn.onclick = (e) => filtrarCategoria(cat.id, e.target);
+                bar.appendChild(btn);
+            });
+        }
+
+        // 3. Filtrar Productos por Categoría
+        function filtrarCategoria(categoriaId, btnElement) {
+            document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+            btnElement.classList.add("active");
+
+            if (categoriaId === 'todas') {
+                renderizarProductos(todosLosProductos);
+            } else {
+                const filtrados = todosLosProductos.filter(p => p.categoria_id === categoriaId);
+                renderizarProductos(filtrados);
+            }
+        }
+
+        // 4. Renderizar Tarjetas de Productos
+        function renderizarProductos(productos) {
+            const grid = document.getElementById("productosGrid");
+            grid.innerHTML = "";
+
+            productos.forEach(p => {
+                grid.innerHTML += `
+                    <div class="card-producto">
+                        <div>
+                            <div class="prod-nombre">${p.nombre}</div>
+                            <div class="prod-desc">${p.descripcion || ''}</div>
+                        </div>
+                        <div class="prod-footer">
+                            <div class="prod-precio">$${p.precio}</div>
+                            <button class="btn-add" onclick="agregarAlCarrito(${p.id}, '${p.nombre}', ${p.precio})">+ Agregar</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 5. Lógica del Carrito de Compras
+        function agregarAlCarrito(id, nombre, precio) {
+            const existe = carrito.find(item => item.producto_id === id);
+            if (existe) {
+                existe.cantidad++;
+            } else {
+                carrito.push({ producto_id: id, nombre: nombre, precio: precio, cantidad: 1, notas: "" });
+            }
+            actualizarCarritoUI();
+        }
+
+        function cambiarCantidad(id, delta) {
+            const item = carrito.find(i => i.producto_id === id);
+            if (item) {
+                item.cantidad += delta;
+                if (item.cantidad <= 0) {
+                    carrito = carrito.filter(i => i.producto_id !== id);
+                }
+            }
+            actualizarCarritoUI();
+        }
+
+        function actualizarNota(id, notaTexto) {
+            const item = carrito.find(i => i.producto_id === id);
+            if (item) item.notas = notaTexto;
+        }
+
+        // 6. Actualizar Interfaz del Carrito y Calcular Total
+        function actualizarCarritoUI() {
+            const contenedor = document.getElementById("carritoItems");
+            const totalEl = document.getElementById("totalAcumulado");
+            const btnEnviar = document.getElementById("btnEnviar");
+
+            if (carrito.length === 0) {
+                contenedor.innerHTML = `<p style="color: #9ca3af; text-align: center; margin-top: 20px;">No has agregado productos.</p>`;
+                totalEl.innerText = "$0";
+                btnEnviar.disabled = true;
+                return;
+            }
+
+            let total = 0;
+            contenedor.innerHTML = "";
+
+            carrito.forEach(item => {
+                const subtotal = item.precio * item.cantidad;
+                total += subtotal;
+
+                contenedor.innerHTML += `
+                    <div class="item-carrito">
+                        <div class="item-top">
+                            <span>${item.nombre}</span>
+                            <span>$${subtotal}</span>
+                        </div>
+                        <div class="item-controls">
+                            <div>
+                                <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id}, -1)">-</button>
+                                <span style="margin: 0 8px; font-weight: bold;">${item.cantidad}</span>
+                                <button class="qty-btn" onclick="cambiarCantidad(${item.producto_id}, 1)">+</button>
+                            </div>
+                            <span style="font-size: 0.85em; color: #6b7280;">$${item.precio} c/u</span>
+                        </div>
+                        <input type="text" class="item-nota" placeholder="Nota (ej. sin azúcar, bien caliente...)" 
+                               value="${item.notas}" onchange="actualizarNota(${item.producto_id}, this.value)">
+                    </div>
+                `;
+            });
+
+            totalEl.innerText = `$${total}`;
+            btnEnviar.disabled = false;
+        }
+
+        // 7. Enviar Pedido a FastAPI
+        async function enviarPedido() {
+            const mesaId = parseInt(document.getElementById("numMesa").value);
+            if (!mesaId || mesaId <= 0) return alert("Por favor ingresa un número de mesa válido.");
+
+            const payload = {
+                mesa_id: mesaId,
+                detalles: carrito.map(item => ({
+                    producto_id: item.producto_id,
+                    cantidad: item.cantidad,
+                    notas: item.notas
+                }))
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/pedidos`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert("🎉 ¡Tu pedido ha sido enviado a la cocina!");
+                    carrito = []; // Limpiar carrito
+                    actualizarCarritoUI();
+                } else {
+                    const errData = await res.json();
+                    alert("Error al enviar el pedido: " + (errData.detail || "Verifica los datos"));
+                }
+            } catch (err) {
+                alert("Error de conexión al enviar el pedido.");
+            }
+        }
+
+        // Cargar datos al iniciar
+        cargarDatos();
+    </script>
+</body>
+</html>

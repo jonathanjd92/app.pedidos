@@ -1,0 +1,68 @@
+# ==========================================
+# Entornos Virtuales de Python
+# ==========================================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# Archivos de Configuración y Variables de Entorno
+# (Para no expone contraseñas de MySQL o llaves secretas)
+# ==========================================
+.env
+.env.local
+.env.*.local
+
+# ==========================================
+# Archivos Temporales y Caché de Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Configuración del Editor de Código (IDE)
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==========================================
+# Base de Datos Local y Logs
+# ==========================================
+*.sqlite3
+*.db
+*.log
+logs/
+
+# ==========================================
+# Cobertura y Pruebas (Si utilizas pytest)
+# ==========================================
+.pytest_cache/
+.coverage
+htmlcov/
